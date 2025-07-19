@@ -1,7 +1,8 @@
 // File: /api/twilio-webhook.js
 
-import { OpenAI } from "openai";
-import axios from "axios";
+const { OpenAI } = require("openai");
+const axios = require("axios");
+
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -16,7 +17,7 @@ const clientConfig = {
   }
 };
 
-export default async function handler(req, res) {
+module.exports = async function (req, res) {
   if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
 
   const from = req.body.From; // Client's number
