@@ -3,7 +3,6 @@
 const { OpenAI } = require("openai");
 const axios = require("axios");
 
-
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Simple in-memory store for thread IDs (swap to DB or Redis in production)
@@ -45,14 +44,14 @@ module.exports = async function (req, res) {
     content: message
   });
 
-  const run = await openai.beta.threads.runs.create(threadId, { assistant_id: assistantId });
+  // Start run
+  let runResult = await openai.beta.threads.runs.create(threadId, { assistant_id: assistantId });
+  let status = runResult.status;
 
-  // Wait for run to complete (polling loop)
-  let status = run.status;
-  let runResult = run;
+  // Poll until run completes or needs action
   while (status !== "completed" && status !== "requires_action" && status !== "failed") {
     await new Promise((r) => setTimeout(r, 1500));
-    runResult = await openai.beta.threads.runs.retrieve(threadId, run.id);
+    runResult = await openai.beta.threads.runs.retrieve(threadId, runResult.id);
     status = runResult.status;
   }
 
@@ -69,7 +68,7 @@ module.exports = async function (req, res) {
     });
 
     // Submit tool output back to OpenAI
-    await openai.beta.threads.runs.submitToolOutputs(threadId, run.id, {
+    await openai.beta.threads.runs.submitToolOutputs(threadId, runResult.id, {
       tool_outputs: [
         {
           tool_call_id: toolCall.id,
@@ -79,30 +78,33 @@ module.exports = async function (req, res) {
     });
 
     // Wait for final message
-    let finalRun;
     do {
       await new Promise((r) => setTimeout(r, 1500));
-      finalRun = await openai.beta.threads.runs.retrieve(threadId, run.id);
-    } while (finalRun.status !== "completed");
+      runResult = await openai.beta.threads.runs.retrieve(threadId, runResult.id);
+    } while (runResult.status !== "completed");
   }
 
-  // Get latest message from assistant
+  // Get latest assistant message
   const messages = await openai.beta.threads.messages.list(threadId);
   const last = messages.data.find((msg) => msg.role === "assistant");
 
   if (!last) return res.status(500).send("No assistant reply");
 
-  // Send back to Twilio
-  await axios.post("https://api.twilio.com/2010-04-01/Accounts/" + process.env.TWILIO_ACCOUNT_SID + "/Messages.json", new URLSearchParams({
-    From: to,
-    To: from,
-    Body: last.content[0].text.value
-  }), {
-    auth: {
-      username: process.env.TWILIO_ACCOUNT_SID,
-      password: process.env.TWILIO_AUTH_TOKEN
+  // Send response via Twilio
+  await axios.post(
+    `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`,
+    new URLSearchParams({
+      From: to,
+      To: from,
+      Body: last.content[0].text.value
+    }),
+    {
+      auth: {
+        username: process.env.TWILIO_ACCOUNT_SID,
+        password: process.env.TWILIO_AUTH_TOKEN
+      }
     }
-  });
+  );
 
   res.status(200).send("OK");
-}
+};
