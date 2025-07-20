@@ -1,5 +1,4 @@
 // /api/twilio-webhook.js
-import { VercelRequest, VercelResponse } from '@vercel/node';
 import Twilio from 'twilio';
 import fetch from 'node-fetch';
 import OpenAI from 'openai';
