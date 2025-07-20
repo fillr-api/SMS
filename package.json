@@ -19,6 +19,7 @@
   "homepage": "https://github.com/fillr-api/SMS#readme",
   "dependencies": {
     "axios": "^1.10.0",
-    "openai": "^5.10.1"
+    "openai": "^5.10.1",
+    "twilio": "^5.7.3"
   }
 }
